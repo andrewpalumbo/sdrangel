@@ -100,8 +100,14 @@ bool LoRaDemod::handleMessage(const Message& cmd)
         m_basebandSampleRate = notif.getSampleRate();
         // Forward to the sink
         DSPSignalNotification* rep = new DSPSignalNotification(notif); // make a copy
-        qDebug() << "LoRaDemod::handleMessage: DSPSignalNotification";
+        qDebug() << "LoRaDemod::handleMessage: DSPSignalNotification: m_basebandSampleRate: " << m_basebandSampleRate;
         m_basebandSink->getInputMessageQueue()->push(rep);
+
+        if (getMessageQueueToGUI())
+        {
+            DSPSignalNotification* repToGUI = new DSPSignalNotification(notif); // make a copy
+            getMessageQueueToGUI()->push(repToGUI);
+        }
 
         return true;
     }

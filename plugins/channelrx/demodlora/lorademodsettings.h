@@ -21,7 +21,8 @@ struct LoRaDemodSettings
     Serializable *m_spectrumGUI;
 
     static const int bandwidths[];
-    static const int nb_bandwidths;
+    static const int nbBandwidths;
+    static const int oversampling;
 
     LoRaDemodSettings();
     void resetToDefaults();

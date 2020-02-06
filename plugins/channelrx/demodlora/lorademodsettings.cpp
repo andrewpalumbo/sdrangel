@@ -7,8 +7,9 @@
 #include "settings/serializable.h"
 #include "lorademodsettings.h"
 
-const int LoRaDemodSettings::bandwidths[] = {7813, 15625, 31250, 62500, 125000, 250000, 50000};
-const int LoRaDemodSettings::nb_bandwidths = 7;
+const int LoRaDemodSettings::bandwidths[] = {7813, 15625, 20833, 31250, 62500, 125000, 250000, 500000};
+const int LoRaDemodSettings::nbBandwidths = 8;
+const int LoRaDemodSettings::oversampling = 1; // TODO: to be changed to 2, 4, ...
 
 LoRaDemodSettings::LoRaDemodSettings() :
     m_centerFrequency(0),
@@ -20,8 +21,8 @@ LoRaDemodSettings::LoRaDemodSettings() :
 
 void LoRaDemodSettings::resetToDefaults()
 {
-    m_bandwidthIndex = 0;
-    m_spreadFactor = 0;
+    m_bandwidthIndex = 5;
+    m_spreadFactor = 7;
     m_rgbColor = QColor(255, 0, 255).rgb();
     m_title = "LoRa Demodulator";
 }

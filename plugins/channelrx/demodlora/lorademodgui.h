@@ -41,6 +41,7 @@ private slots:
 	void on_BW_valueChanged(int value);
 	void on_Spread_valueChanged(int value);
 	void onWidgetRolled(QWidget* widget, bool rollDown);
+	void handleInputMessages();
 
 private:
 	Ui::LoRaDemodGUI* ui;
@@ -48,6 +49,7 @@ private:
 	DeviceUISet* m_deviceUISet;
 	ChannelMarker m_channelMarker;
 	LoRaDemodSettings m_settings;
+    int m_basebandSampleRate;
 	bool m_doApplySettings;
 
 	LoRaDemod* m_LoRaDemod;
@@ -60,6 +62,7 @@ private:
     void blockApplySettings(bool block);
 	void applySettings(bool force = false);
 	void displaySettings();
+    void setBandwidths();
 };
 
 #endif // INCLUDE_LoRaDEMODGUI_H

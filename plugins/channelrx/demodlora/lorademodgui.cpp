@@ -5,10 +5,12 @@
 
 #include "ui_lorademodgui.h"
 #include "dsp/spectrumvis.h"
+#include "dsp/dspengine.h"
+#include "dsp/dspcommands.h"
 #include "gui/glspectrum.h"
+#include "gui/glspectrumgui.h"
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
-#include "dsp/dspengine.h"
 
 #include "lorademod.h"
 #include "lorademodgui.h"
@@ -70,8 +72,36 @@ bool LoRaDemodGUI::deserialize(const QByteArray& data)
 
 bool LoRaDemodGUI::handleMessage(const Message& message)
 {
-    (void) message;
-	return false;
+    if (DSPSignalNotification::match(message))
+    {
+        DSPSignalNotification& notif = (DSPSignalNotification&) message;
+        int basebandSampleRate = notif.getSampleRate();
+        qDebug() << "LoRaDemodGUI::handleMessage: DSPSignalNotification: m_basebandSampleRate: " << basebandSampleRate;
+
+        if (basebandSampleRate != m_basebandSampleRate)
+        {
+            m_basebandSampleRate = basebandSampleRate;
+            setBandwidths();
+        }
+
+        return true;
+    }
+    else
+    {
+    	return false;
+    }
+}
+
+void LoRaDemodGUI::handleInputMessages()
+{
+    Message* message;
+
+    while ((message = getInputMessageQueue()->pop()) != 0)
+    {
+        if (handleMessage(*message)) {
+            delete message;
+        }
+    }
 }
 
 void LoRaDemodGUI::viewChanged()
@@ -83,15 +113,17 @@ void LoRaDemodGUI::on_BW_valueChanged(int value)
 {
     if (value < 0) {
         m_settings.m_bandwidthIndex = 0;
-    } else if (value < LoRaDemodSettings::nb_bandwidths) {
+    } else if (value < LoRaDemodSettings::nbBandwidths) {
         m_settings.m_bandwidthIndex = value;
     } else {
-        m_settings.m_bandwidthIndex = LoRaDemodSettings::nb_bandwidths - 1;
+        m_settings.m_bandwidthIndex = LoRaDemodSettings::nbBandwidths - 1;
     }
 
 	int thisBW = LoRaDemodSettings::bandwidths[value];
 	ui->BWText->setText(QString("%1 Hz").arg(thisBW));
 	m_channelMarker.setBandwidth(thisBW);
+	ui->glSpectrum->setSampleRate(thisBW);
+	ui->glSpectrum->setCenterFrequency(thisBW/2);
 
 	applySettings();
 }
@@ -100,9 +132,7 @@ void LoRaDemodGUI::on_Spread_valueChanged(int value)
 {
     m_settings.m_spreadFactor = value;
     ui->SpreadText->setText(tr("%1").arg(value));
-	int spectrumRate = 1 << m_settings.m_spreadFactor;
-	ui->glSpectrum->setSampleRate(spectrumRate);
-	ui->glSpectrum->setCenterFrequency(spectrumRate/2);
+    ui->spectrumGUI->setFFTSize(m_settings.m_spreadFactor);
 
     applySettings();
 }
@@ -119,6 +149,7 @@ LoRaDemodGUI::LoRaDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	m_pluginAPI(pluginAPI),
 	m_deviceUISet(deviceUISet),
 	m_channelMarker(this),
+    m_basebandSampleRate(250000),
 	m_doApplySettings(true)
 {
 	ui->setupUi(this);
@@ -128,10 +159,8 @@ LoRaDemodGUI::LoRaDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	m_spectrumVis = new SpectrumVis(SDR_RX_SCALEF, ui->glSpectrum);
 	m_LoRaDemod = (LoRaDemod*) rxChannel; //new LoRaDemod(m_deviceUISet->m_deviceSourceAPI);
 	m_LoRaDemod->setSpectrumSink(m_spectrumVis);
+    m_LoRaDemod->setMessageQueueToGUI(getInputMessageQueue());
 
-	int spectrumRate = 1 << m_settings.m_spreadFactor;
-	ui->glSpectrum->setSampleRate(spectrumRate);
-	ui->glSpectrum->setCenterFrequency(spectrumRate/2);
 	ui->glSpectrum->setDisplayWaterfall(true);
 	ui->glSpectrum->setDisplayMaxHold(true);
 
@@ -149,6 +178,9 @@ LoRaDemodGUI::LoRaDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	m_settings.setChannelMarker(&m_channelMarker);
 	m_settings.setSpectrumGUI(ui->spectrumGUI);
 
+    connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()));
+
+    setBandwidths();
 	displaySettings();
 	applySettings(true);
 }
@@ -187,9 +219,31 @@ void LoRaDemodGUI::displaySettings()
     setTitleColor(m_settings.m_rgbColor);
     m_channelMarker.blockSignals(false);
 
+	ui->glSpectrum->setSampleRate(thisBW);
+	ui->glSpectrum->setCenterFrequency(thisBW/2);
+
     blockApplySettings(true);
     ui->BWText->setText(QString("%1 Hz").arg(thisBW));
     ui->BW->setValue(m_settings.m_bandwidthIndex);
+    ui->Spread->setValue(m_settings.m_spreadFactor);
     ui->SpreadText->setText(tr("%1").arg(m_settings.m_spreadFactor));
+    ui->spectrumGUI->setFFTSize(m_settings.m_spreadFactor);
     blockApplySettings(false);
+}
+
+void LoRaDemodGUI::setBandwidths()
+{
+    int maxBandwidth = m_basebandSampleRate / LoRaDemodSettings::oversampling;
+    int maxIndex = 0;
+
+    for (; (maxIndex < LoRaDemodSettings::nbBandwidths) && (LoRaDemodSettings::bandwidths[maxIndex] <= maxBandwidth); maxIndex++)
+    {}
+
+    if (maxIndex != 0)
+    {
+        qDebug("LoRaDemodGUI::setBandwidths: avl: %d max: %d", maxBandwidth, LoRaDemodSettings::bandwidths[maxIndex-1]);
+        ui->BW->setMaximum(maxIndex - 1);
+        int index = ui->BW->value();
+        ui->BWText->setText(QString("%1 Hz").arg(LoRaDemodSettings::bandwidths[index]));
+    }
 }

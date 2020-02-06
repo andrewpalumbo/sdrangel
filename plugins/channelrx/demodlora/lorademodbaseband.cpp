@@ -137,7 +137,7 @@ void LoRaDemodBaseband::applySettings(const LoRaDemodSettings& settings, bool fo
      || (settings.m_centerFrequency != m_settings.m_centerFrequency) || force)
     {
         m_channelizer->setChannelization(
-            LoRaDemodSettings::bandwidths[settings.m_bandwidthIndex],
+            LoRaDemodSettings::bandwidths[settings.m_bandwidthIndex]*LoRaDemodSettings::oversampling,
             settings.m_centerFrequency
         );
         m_sink.applyChannelSettings(
